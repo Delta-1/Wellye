@@ -287,8 +287,8 @@ export default function Home({
           text="Revisar, lembrar, evoluir."
           color="purple"
           onClick={() => {
-            location.hash = "study/cards";
             navigate("study");
+            location.hash = "study/cards";
           }}
         />
         <Tool

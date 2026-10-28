@@ -846,7 +846,7 @@ export function ActivityModal({
             });
           }}
         >
-          Praticar este assunto
+          Praticar esta matéria
           <ArrowRight size={16} />
         </button>
         <button className="button primary" onClick={complete}>

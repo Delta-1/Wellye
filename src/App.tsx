@@ -100,6 +100,7 @@ export default function App() {
   useEffect(() => {
     if (!state.profile.onboarded) return;
     const d = new Date();
+    d.setDate(1);
     d.setMonth(d.getMonth() - 1);
     const month = dayKey(d).slice(0, 7);
     const stats = monthStats(state, month);
