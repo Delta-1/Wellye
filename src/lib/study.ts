@@ -1,0 +1,42 @@
+import type { Activity, AppState, Subject } from './types';
+import { questions, relevantSubjects } from './questions.ts';
+export function dayKey(date = new Date()): string { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; }
+export function emptyState(name='Estudante'):AppState {return {version:1,dailyPlans:{},focusSessions:[],profile:{name,minutes:45,difficulties:[],formats:['Leitura','Exercícios'],onboarded:false,diagnosticDone:false,focus:[],reminder:'19:00',reminderEnabled:false,community:false,nickname:''},goals:[],answers:[],quizzes:[],completions:{},studyMinutes:{},cards:[],bookmarks:[],recapSeen:'',createdAt:new Date().toISOString()};}
+export function accuracy(state:AppState,subject?:Subject){const a=state.answers.filter(x=>!subject||x.subject===subject);return a.length?Math.round(a.filter(x=>x.correct).length/a.length*100):0;}
+export function activeSubjects(state:AppState):Subject[] { return [...new Set(state.goals.filter(g=>g.active).flatMap(g=>relevantSubjects(g.type)))].length ? [...new Set(state.goals.filter(g=>g.active).flatMap(g=>relevantSubjects(g.type)))] : relevantSubjects('enem'); }
+export function planSignature(state:AppState){return JSON.stringify([state.profile.minutes,state.profile.focus,state.profile.formats,state.goals.filter(g=>g.active).map(g=>[g.id,g.type]),state.profile.diagnosticDone]);}
+export function plan(state:AppState,date=new Date()):Activity[]{
+ const stored=state.dailyPlans?.[dayKey(date)];if(stored?.signature===planSignature(state))return stored.activities;
+ const relevant=activeSubjects(state);const priorities=[...relevant].sort((a,b)=>{
+ const weight=(s:Subject)=>(state.profile.focus.includes(s)?120:0)+(state.profile.difficulties.includes(s)?40:0)+(state.answers.some(x=>x.subject===s)?100-accuracy(state,s):35);
+ return weight(b)-weight(a);
+ });
+ const total=state.profile.minutes;const count=Math.min(4,Math.max(1,Math.floor(total/15)));const minutes=Math.floor(total/count);const offset=Math.floor(new Date(date.getFullYear(),date.getMonth(),date.getDate()).getTime()/86400000);
+ return Array.from({length:count},(_,i)=>{const subject=priorities[i%priorities.length];const lessonPool=questions.filter(q=>q.subject===subject);const wrong=state.answers.filter(a=>!a.correct&&a.subject===subject).map(a=>a.questionId);const attempts=state.answers.filter(a=>a.subject===subject);const ceiling=attempts.length?accuracy(state,subject)<60?2:accuracy(state,subject)<80?3:5:1;const appropriate=lessonPool.filter(q=>q.level<=ceiling);const q=lessonPool.find(q=>wrong.includes(q.id))??appropriate[(offset+i)%appropriate.length];const kind=state.profile.formats[i%state.profile.formats.length]??'Leitura';return {id:`${dayKey(date)}-${i}-${subject}`,title:kind==='Exercícios'?'Praticar e aprender':kind==='Áudio'?'Escutar e revisar':kind==='Vídeo'?'Explorar em vídeo':kind==='Mapa mental'?'Conectar as ideias':'Entender o conteúdo',subject,topic:q.topic,minutes:minutes+(i===count-1?total-minutes*count:0),kind};});
+}
+export function streak(state:AppState,now=new Date()):number {const days=new Set([...state.answers.map(a=>dayKey(new Date(a.at))),...Object.keys(state.completions).filter(d=>state.completions[d].length),...Object.keys(state.studyMinutes).filter(d=>state.studyMinutes[d]>0)]);let count=0;const d=new Date(now);if(!days.has(dayKey(d)))d.setDate(d.getDate()-1);while(days.has(dayKey(d))){count++;d.setDate(d.getDate()-1);}return count;}
+export function weekly(state:AppState,count=7,now=new Date()){return Array.from({length:count},(_,i)=>{const d=new Date(now);d.setDate(d.getDate()-(count-1-i));const key=dayKey(d);const answers=state.answers.filter(a=>dayKey(new Date(a.at))===key);return {key,label:d.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.',''),day:d.getDate(),answers:answers.length,accuracy:answers.length?Math.round(answers.filter(a=>a.correct).length/answers.length*100):0,minutes:state.studyMinutes[key]??0};});}
+export function monthStats(state:AppState,key:string){const answers=state.answers.filter(a=>dayKey(new Date(a.at)).startsWith(key));const days=new Set(answers.map(a=>dayKey(new Date(a.at))));for(const [d,items]of Object.entries(state.completions))if(d.startsWith(key)&&items.length)days.add(d);return {answers:answers.length,correct:answers.filter(a=>a.correct).length,minutes:Object.entries(state.studyMinutes).filter(([d])=>d.startsWith(key)).reduce((a,[,v])=>a+v,0),days:days.size,quizzes:state.quizzes.filter(q=>dayKey(new Date(q.at)).startsWith(key)).length};}
+export function mergeStates(local:AppState,remote:AppState):AppState {
+ const unique=<T extends {id:string}>(a:T[],b:T[])=>[...new Map([...a,...b].map(x=>[x.id,x])).values()];
+ const completions={...remote.completions};for(const [d,ids]of Object.entries(local.completions))completions[d]=[...new Set([...(completions[d]??[]),...ids])];
+ const focusSessions=unique(remote.focusSessions??[],local.focusSessions??[]);
+ const studyMinutes:Record<string,number>={};for(const d of new Set([...Object.keys(remote.studyMinutes),...Object.keys(local.studyMinutes)])){const localSessions=(local.focusSessions??[]).filter(x=>x.day===d).reduce((a,x)=>a+x.minutes,0);const remoteSessions=(remote.focusSessions??[]).filter(x=>x.day===d).reduce((a,x)=>a+x.minutes,0);const baseline=Math.max(0,(local.studyMinutes[d]??0)-localSessions,(remote.studyMinutes[d]??0)-remoteSessions);studyMinutes[d]=baseline+focusSessions.filter(x=>x.day===d).reduce((a,x)=>a+x.minutes,0);}
+ return {...local,answers:unique(remote.answers,local.answers),quizzes:unique(remote.quizzes,local.quizzes),completions,studyMinutes,focusSessions};
+}
+export function validateState(value:unknown):value is AppState {
+ if(!value||typeof value!=='object')return false;
+ const s=value as AppState;const p=s.profile;
+ const strings=(v:unknown):v is string[]=>Array.isArray(v)&&v.every(x=>typeof x==='string');
+ const validSubjects=(v:unknown)=>strings(v)&&v.every(x=>['Língua Portuguesa','Matemática','Ciências da Natureza','Ciências Humanas','Informática','Conhecimentos Específicos'].includes(x));
+ const finite=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0;
+ if(s.version!==1||!p||typeof p.name!=='string'||p.name.length<2||p.name.length>60||![15,30,45,60,90,120].includes(p.minutes)||!validSubjects(p.difficulties)||!validSubjects(p.focus)||!strings(p.formats)||!p.formats.length||!p.formats.every(x=>['Leitura','Vídeo','Exercícios','Áudio','Mapa mental'].includes(x))||typeof p.onboarded!=='boolean'||typeof p.diagnosticDone!=='boolean'||typeof p.reminder!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.reminder)||typeof p.nickname!=='string'||typeof p.community!=='boolean')return false;
+ if(!Array.isArray(s.goals)||s.goals.some(g=>!g||typeof g.id!=='string'||!['escolar','enem','vestibular','concurso','outros'].includes(g.type)||typeof g.target!=='string'||typeof g.name!=='string'||typeof g.board!=='string'||typeof g.date!=='string'||typeof g.active!=='boolean'))return false;
+ if(!Array.isArray(s.answers)||s.answers.some(a=>!a||typeof a.id!=='string'||typeof a.questionId!=='string'||!finite(a.selected)||a.selected>4||typeof a.correct!=='boolean'||!validSubjects([a.subject])||!Number.isFinite(Date.parse(a.at))||!finite(a.seconds)||typeof a.quizId!=='string'))return false;
+ if(!Array.isArray(s.quizzes)||s.quizzes.some(q=>!q||typeof q.id!=='string'||!finite(q.total)||q.total<1||!finite(q.correct)||q.correct>q.total||!Number.isFinite(Date.parse(q.at))||!strings(q.difficulty)))return false;
+ if(!Array.isArray(s.cards)||s.cards.some(c=>!c||typeof c.id!=='string'||typeof c.front!=='string'||typeof c.back!=='string'||typeof c.subject!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(c.due)||!finite(c.interval))||!strings(s.bookmarks))return false;
+ if(!s.completions||typeof s.completions!=='object'||Object.values(s.completions).some(v=>!strings(v))||!s.studyMinutes||typeof s.studyMinutes!=='object'||Object.values(s.studyMinutes).some(v=>!finite(v))||typeof s.recapSeen!=='string'||!Number.isFinite(Date.parse(s.createdAt)))return false;
+ if(s.focusSessions&&(!Array.isArray(s.focusSessions)||s.focusSessions.some(f=>!f||typeof f.id!=='string'||typeof f.day!=='string'||!finite(f.minutes))))return false;
+ if(s.dailyPlans&&Object.values(s.dailyPlans).some(d=>!d||typeof d.signature!=='string'||!Array.isArray(d.activities)||d.activities.some(a=>!a||typeof a.id!=='string'||!validSubjects([a.subject])||typeof a.topic!=='string'||!finite(a.minutes))))return false;
+ return true;
+}
