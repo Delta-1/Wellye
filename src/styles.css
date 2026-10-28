@@ -1579,21 +1579,56 @@ label > small {
 }
 /* Authentication and first steps */
 .auth-page {
+  /* The entry screen stays light, independently of the in-app theme. */
+  --bg: #fff;
+  --panel: #fff;
+  --panel2: #f7f6fc;
+  --panel3: #eee9f9;
+  --text: #201b2d;
+  --subtle: #686174;
+  --muted: #797087;
+  --border: #e5dff0;
+  --purple: #8240e4;
+  --accent: #8240e4;
+  --green: #357a4d;
+  --rose: #ad5481;
+  --purple-bg: #f0e8fc;
+  --pink-bg: #fbeaf0;
+  color-scheme: light;
+  color: var(--text);
+  background: #fff;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
 .auth-story {
   position: relative;
-  background:
-    radial-gradient(ellipse at 0 70%, #332049 0, transparent 60%), #151021;
+  background: #fff;
+  border-right: 1px solid var(--border);
   padding: 40px 55px;
   overflow: hidden;
   min-height: 800px;
-  color: #f5f0fc;
+  color: var(--text);
 }
 .auth-story > .logo {
-  color: #f5f0fc;
+  color: var(--text);
+}
+.auth-page .pill {
+  background: var(--purple-bg);
+  border-color: #d9c7f2;
+  color: var(--purple);
+}
+.auth-page .live-dot {
+  background: var(--purple);
+  box-shadow: 0 0 9px #8240e420;
+}
+.auth-page .button.primary {
+  background: linear-gradient(110deg, #a646f5, #7629ed);
+  border-color: #8d3dec;
+  color: #fff;
+}
+.auth-page .button.primary:hover {
+  background: linear-gradient(110deg, #9636e5, #6820dc);
 }
 .auth-story-content {
   position: relative;
@@ -1608,11 +1643,11 @@ label > small {
   font-weight: 750;
 }
 .auth-story h1 > span {
-  color: #b99be8;
+  color: var(--purple);
 }
 .auth-story-content > p {
   font-size: 14px;
-  color: #b9aac9;
+  color: var(--subtle);
   margin-top: 23px;
   line-height: 1.9;
 }
@@ -1657,15 +1692,15 @@ label > small {
   position: relative;
   height: 138px;
   width: 140px;
-  background: linear-gradient(135deg, #936db14f, #6a43822c);
-  border: 1px solid #c098ed32;
+  background: linear-gradient(135deg, #eee1ff, #e0cbfa);
+  border: 1px solid #d2b7f2;
   transform: rotate(-12deg);
   border-radius: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d0b4ef;
-  box-shadow: 0 20px 60px #150c2440;
+  color: #8240cf;
+  box-shadow: 0 20px 60px #8240cf1a;
 }
 .orbit-book > svg:last-child {
   position: absolute;
@@ -1680,10 +1715,10 @@ label > small {
   padding: 11px 15px;
   font-size: 10px;
   border-radius: 9px;
-  border: 1px solid #c098ed30;
-  background: #261c33;
-  color: #d2c2e3;
-  box-shadow: 0 10px 30px #08030e24;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: #72489a;
+  box-shadow: 0 10px 30px #8240cf12;
 }
 .orbit-label.one {
   top: 35px;
@@ -1694,7 +1729,7 @@ label > small {
   bottom: 35px;
   left: 0;
   transform: rotate(-5deg);
-  color: #b7d2ad;
+  color: #427653;
 }
 .auth-form-wrap {
   display: flex;
