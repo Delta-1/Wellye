@@ -87,8 +87,8 @@ O assistente tem integração real no backend e fica indisponível de forma expl
 
 Configure, nos **Secrets da Edge Function** do Supabase:
 
-- `GEMINI_API_KEY`: sua chave privada.
-- `GEMINI_MODEL`: opcional; padrão `gemini-2.5-flash`. Confirme a disponibilidade do modelo na sua conta e altere o secret quando necessário.
+- `WELLYE_GEMINI_API_KEY`: sua chave privada.
+- `WELLYE_GEMINI_MODEL`: opcional; padrão `gemini-2.5-flash`. Confirme a disponibilidade do modelo na sua conta e altere o secret quando necessário.
 
 Não coloque essas chaves em `VITE_*`, GitHub Pages ou no código. O assistente recebe apenas o pedido e um contexto reduzido de estudo, sem senha ou e-mail.
 

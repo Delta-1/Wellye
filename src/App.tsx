@@ -1,44 +1,580 @@
-import { useEffect, useState } from 'react';
-import { ArrowRight, BarChart3, Bell, BookOpen, ChevronRight, Flame, House, Moon, Search, Settings2, Sparkles, Sun, Target, UserRound, Users, WifiOff } from 'lucide-react';
-import { Capacitor } from '@capacitor/core';
-import Auth from './components/Auth';
-import Onboarding from './components/Onboarding';
-import Home from './components/Home';
-import Study, { ActivityModal } from './components/Study';
-import Goals from './components/Goals';
-import Performance, { Recap } from './components/Performance';
-import Community from './components/Community';
-import Profile from './components/Profile';
-import Quiz from './components/Quiz';
-import type { QuizConfig } from './components/Quiz';
-import { Logo, Modal, SubjectIcon } from './components/UI';
-import { useApp } from './lib/store';
-import { dayKey, monthStats, streak, plan, planSignature } from './lib/study';
-import { questions } from './lib/questions';
-import { request } from './lib/api';
-import type { Activity, Page } from './lib/types';
-const nav:{id:Page;label:string;icon:typeof House}[]=[{id:'home',label:'Início',icon:House},{id:'study',label:'Estudos',icon:BookOpen},{id:'goals',label:'Objetivos',icon:Target},{id:'performance',label:'Desempenho',icon:BarChart3},{id:'community',label:'Comunidade',icon:Users}];
-interface InstallEvent extends Event {prompt:()=>Promise<void>;userChoice:Promise<{outcome:string}>}
-export default function App(){
- const {state,update,user,guest,ready,online,syncStatus,token,toast,recoveryCode,dismissRecovery}=useApp();const [page,setPage]=useState<Page>(()=>{const p=location.hash.slice(1).split('/')[0]as Page;return [...nav.map(n=>n.id),'profile'].includes(p)?p:'home';});const [dark,setDark]=useState(()=>localStorage.getItem('wellye.theme')!=='light');const [quiz,setQuiz]=useState<QuizConfig|null>(null);const [activity,setActivity]=useState<Activity|null>(null);const [recap,setRecap]=useState('');const [search,setSearch]=useState(false);const [query,setQuery]=useState('');const [ai,setAi]=useState(false);const [aiBusy,setAiBusy]=useState(false);const [aiText,setAiText]=useState('');const [aiResponse,setAiResponse]=useState('');const [installEvent,setInstallEvent]=useState<InstallEvent|null>(null);const [installHelp,setInstallHelp]=useState(false);
- useEffect(()=>{document.documentElement.dataset.theme=dark?'dark':'light';localStorage.setItem('wellye.theme',dark?'dark':'light');},[dark]);
- useEffect(()=>{const h=()=>{const p=location.hash.slice(1).split('/')[0]as Page;if([...nav.map(n=>n.id),'profile'].includes(p))setPage(p);};window.addEventListener('hashchange',h);const install=(e:Event)=>{e.preventDefault();setInstallEvent(e as InstallEvent);};window.addEventListener('beforeinstallprompt',install);return()=>{window.removeEventListener('hashchange',h);window.removeEventListener('beforeinstallprompt',install);};},[]);
- useEffect(()=>{if(!state.profile.onboarded)return;const d=new Date();d.setMonth(d.getMonth()-1);const month=dayKey(d).slice(0,7);const stats=monthStats(state,month);if(state.recapSeen!==month&&(stats.answers||stats.minutes||stats.days))setRecap(month);},[state.profile.onboarded]);
- useEffect(()=>{if(!state.profile.reminderEnabled||Capacitor.isNativePlatform())return;const check=()=>{const now=new Date();const time=now.toTimeString().slice(0,5);if(time===state.profile.reminder&&localStorage.getItem('wellye.reminded')!==dayKey()&&'Notification'in window&&Notification.permission==='granted'){localStorage.setItem('wellye.reminded',dayKey());void navigator.serviceWorker?.ready.then(reg=>reg.showNotification('Um passo de cada vez 💜',{body:'Seu plano no Wellye está esperando por você.',icon:'./icon-192.png',tag:'wellye-study'}));}};const t=setInterval(check,20000);check();return()=>clearInterval(t);},[state.profile.reminderEnabled,state.profile.reminder]);
- const today=dayKey();const signature=planSignature(state);
- useEffect(()=>{if(!state.profile.onboarded)return;if(state.dailyPlans?.[today]?.signature!==signature){update(s=>({...s,dailyPlans:{...s.dailyPlans,[today]:{signature:planSignature(s),activities:plan(s)}}}));}},[state.profile.onboarded,today,signature,update]);
- function navigate(p:Page){setPage(p);location.hash=p;window.scrollTo({top:0,behavior:'smooth'});}
- async function install(){if(Capacitor.isNativePlatform()){toast('Você já está usando o aplicativo Wellye.');return;}if(installEvent){await installEvent.prompt();await installEvent.userChoice;setInstallEvent(null);}else setInstallHelp(true);}
- function closeRecap(){update(s=>({...s,recapSeen:recap}));setRecap('');}
- const recovery=recoveryCode?<Modal title="Guarde seu código de recuperação" subtitle="Seu acesso de volta, se um dia esquecer a senha." onClose={()=>{}}><p>Guarde este código em um local seguro. Ele aparece apenas agora e permite redefinir sua senha.</p><code className="recovery-code">{recoveryCode}</code><div className="button-row"><button className="button secondary" onClick={()=>navigator.clipboard.writeText(recoveryCode).then(()=>toast('Código copiado.')).catch(()=>toast('Selecione o código e copie manualmente.'))}>Copiar código</button><button className="button primary" onClick={dismissRecovery}>Guardei. Continuar<ArrowRight size={16}/></button></div></Modal>:null;
- if(!user&&!guest)return <Auth/>;
- if(!ready)return <div className="loading-screen"><Logo/><span>Preparando seu espaço…</span></div>;
- if(!state.profile.onboarded)return <><Onboarding onComplete={(start)=>{if(start)setQuiz({kind:'diagnostic',count:5});}}/>{recovery}</>;
- return <><div className="app-shell"><aside className="sidebar"><a href="#home" className="sidebar-logo" aria-label="Wellye início"><Logo/></a><div className="workspace-label">SEU ESPAÇO DE APRENDIZADO</div><nav aria-label="Navegação principal">{nav.map(({id,label,icon:Icon})=><button key={id} className={page===id?'active':''} onClick={()=>navigate(id)}><Icon size={19}/><span>{label}</span>{id==='goals'&&<small>{state.goals.filter(g=>g.active).length}</small>}{page===id&&<span className="nav-active-dot"/>}</button>)}</nav><div className="sidebar-inspiration"><span className="inspire-star">✦</span><h3>Seu único ritmo<br/>é o seu.</h3><p>Um dia de cada vez.<br/>Um passo de cada vez.</p><div className="inspire-lines"/></div><div className="sidebar-bottom"><button className={page==='profile'?'active':''} onClick={()=>navigate('profile')}><Settings2 size={18}/> Preferências</button><button onClick={()=>setDark(!dark)}>{dark?<Moon size={18}/>:<Sun size={18}/>} {dark?'Modo escuro':'Modo claro'}<span className={`switch ${dark?'on':''}`}/></button><div className="sidebar-user"><span className="avatar">{state.profile.name[0]?.toUpperCase()}</span><div><strong>{state.profile.name.split(' ')[0]}</strong><small>{guest?'Modo visitante':'Seu futuro em construção'}</small></div><button className="icon-button" aria-label="Meu perfil" onClick={()=>navigate('profile')}><ChevronRight size={16}/></button></div></div></aside><div className="app-main"><header className="app-header"><div className="breadcrumb"><span>Meu espaço</span><ChevronRight size={13}/><strong>{page==='profile'?'Perfil':nav.find(n=>n.id===page)?.label}</strong></div><div className="mobile-brand"><Logo/></div><button className="search-trigger" onClick={()=>setSearch(true)}><Search size={16}/><span>O que vamos aprender hoje?</span><kbd>⌕</kbd></button><div className="header-right"><span className="header-streak"><Flame size={17}/>{streak(state)}<span>{streak(state)===1?'dia':'dias'}</span></span><button className="ai-trigger" onClick={()=>setAi(true)}><Sparkles size={16}/><span>Assistente</span></button><button className="icon-button header-bell" aria-label="Lembretes e notificações" onClick={()=>navigate('profile')}><Bell size={19}/>{state.profile.reminderEnabled&&<i/>}</button><button className="avatar header-avatar" aria-label="Meu perfil" onClick={()=>navigate('profile')}>{state.profile.name[0]?.toUpperCase()}</button></div></header>{!online&&<div className="offline-banner"><WifiOff size={15}/> Você está offline. Continue estudando; seu progresso fica salvo aqui.</div>}{guest&&<div className="guest-banner"><span><Sparkles size={13}/> Você está conhecendo o Wellye. Seu progresso fica neste dispositivo.</span><button onClick={()=>{navigate('profile');}}>Salvar na minha conta<ArrowRight size={13}/></button></div>}
- <main id="main-content">{page==='home'?<Home navigate={navigate} startQuiz={setQuiz} openActivity={setActivity}/>:page==='study'?<Study key={location.hash} startQuiz={setQuiz} openActivity={setActivity}/>:page==='goals'?<Goals/>:page==='performance'?<Performance recap={()=>setRecap(dayKey().slice(0,7))}/>:page==='community'?<Community/>:<Profile dark={dark} toggleTheme={()=>setDark(!dark)} navigate={navigate} install={()=>void install()}/>}</main><footer className="app-footer"><span>Wellye <span>✦</span> Feito para o seu ritmo.</span><span className="sync-indicator"><i className={!online?'offline':''}/>{guest?'Salvo neste dispositivo':syncStatus}</span></footer></div></div><nav className="bottom-nav" aria-label="Navegação no celular">{[...nav.slice(0,4),{id:'profile' as Page,label:'Perfil',icon:UserRound}].map(({id,label,icon:Icon})=><button key={id} className={`${page===id?'active':''} ${id==='goals'?'center-goal':''}`} onClick={()=>navigate(id)}><span><Icon size={20}/></span><small>{label==='Desempenho'?'Evolução':label}</small></button>)}</nav>
- {quiz&&<Quiz config={quiz} onClose={()=>setQuiz(null)}/>} {activity&&<ActivityModal activity={activity} onClose={()=>setActivity(null)} startQuiz={setQuiz}/>} {recap&&<Recap month={recap} onClose={closeRecap}/>} {recovery}
- {search&&<Modal title="O que vamos aprender?" onClose={()=>{setSearch(false);setQuery('');}}><div className="input-icon search-input"><Search size={18}/><input autoFocus placeholder="Busque matéria ou assunto…" value={query} onChange={e=>setQuery(e.target.value)}/></div><div className="search-results">{questions.filter(q=>`${q.topic} ${q.subject} ${q.lesson}`.toLowerCase().includes(query.toLowerCase())).slice(0,8).map(q=><button key={q.id} onClick={()=>{setSearch(false);setActivity({id:`search-${q.id}-${dayKey()}`,subject:q.subject,topic:q.topic,title:q.topic,minutes:10,kind:'Leitura'});}}><SubjectIcon subject={q.subject}/><span><strong>{q.topic}</strong><small>{q.subject}</small></span><ArrowRight size={15}/></button>)}</div></Modal>}
- {ai&&<Modal title="Um apoio no seu caminho" subtitle="Assistente Wellye · Gemini" onClose={()=>setAi(false)}><p>Conte o que quer entender ou cole um trecho do edital. Quando disponível, o assistente usa seu objetivo e suas matérias para orientar o estudo.</p><form onSubmit={async e=>{e.preventDefault();if(!token){toast('Entre em uma conta para conversar com o assistente.');return;}setAiBusy(true);try{const result=await request<{text:string}>('ai',{prompt:aiText,context:{goal:state.goals.find(g=>g.active)?.target,minutes:state.profile.minutes,difficulties:state.profile.difficulties}},token);setAiResponse(result.text);}catch(e){setAiResponse(e instanceof Error?e.message:'O assistente está indisponível agora.');}finally{setAiBusy(false);}}}><label>Como posso ajudar?<textarea required rows={4} maxLength={12000} value={aiText} onChange={e=>setAiText(e.target.value)} placeholder="Ex.: me ajude a entender porcentagem com um exemplo simples."/></label><button className="button primary full" disabled={aiBusy}>{aiBusy?'Preparando sua orientação…':'Pedir uma orientação'}<Sparkles size={16}/></button></form>{aiResponse&&<div className="ai-response" role="status">{aiResponse}</div>}<p className="fineprint">Confira informações importantes na fonte oficial. O assistente não verifica automaticamente o último edital.</p></Modal>}
- {installHelp&&<Modal title="Wellye sempre por perto" onClose={()=>setInstallHelp(false)}><div className="install-options"><h3>No Android</h3><p>No menu do Chrome, escolha “Instalar aplicativo” ou “Adicionar à tela inicial”. O APK também fica disponível nas execuções do GitHub Actions após a compilação.</p><h3>No iPhone ou iPad</h3><p>No Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”.</p><h3>No computador</h3><p>No Chrome ou Edge, use o ícone de instalação na barra de endereços, quando disponível.</p><a className="button secondary full" href="https://github.com/Delta-1/Wellye/actions" target="_blank" rel="noreferrer">Ver compilações do aplicativo<ArrowRight size={16}/></a></div></Modal>}
- </>;
+import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  BarChart3,
+  Bell,
+  BookOpen,
+  ChevronRight,
+  Flame,
+  House,
+  Moon,
+  Search,
+  Settings2,
+  Sparkles,
+  Sun,
+  Target,
+  UserRound,
+  Users,
+  WifiOff,
+} from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import Auth from "./components/Auth";
+import Onboarding from "./components/Onboarding";
+import Home from "./components/Home";
+import Study, { ActivityModal } from "./components/Study";
+import Goals from "./components/Goals";
+import Performance, { Recap } from "./components/Performance";
+import Community from "./components/Community";
+import Profile from "./components/Profile";
+import Quiz from "./components/Quiz";
+import type { QuizConfig } from "./components/Quiz";
+import { Logo, Modal, SubjectIcon } from "./components/UI";
+import { useApp } from "./lib/store";
+import { dayKey, monthStats, streak, plan, planSignature } from "./lib/study";
+import { questions } from "./lib/questions";
+import { request } from "./lib/api";
+import type { Activity, Page } from "./lib/types";
+const nav: { id: Page; label: string; icon: typeof House }[] = [
+  { id: "home", label: "Início", icon: House },
+  { id: "study", label: "Estudos", icon: BookOpen },
+  { id: "goals", label: "Objetivos", icon: Target },
+  { id: "performance", label: "Desempenho", icon: BarChart3 },
+  { id: "community", label: "Comunidade", icon: Users },
+];
+interface InstallEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: string }>;
+}
+export default function App() {
+  const {
+    state,
+    update,
+    user,
+    guest,
+    ready,
+    online,
+    syncStatus,
+    token,
+    toast,
+    recoveryCode,
+    dismissRecovery,
+  } = useApp();
+  const [page, setPage] = useState<Page>(() => {
+    const p = location.hash.slice(1).split("/")[0] as Page;
+    return [...nav.map((n) => n.id), "profile"].includes(p) ? p : "home";
+  });
+  const [dark, setDark] = useState(
+    () => localStorage.getItem("wellye.theme") !== "light",
+  );
+  const [quiz, setQuiz] = useState<QuizConfig | null>(null);
+  const [activity, setActivity] = useState<Activity | null>(null);
+  const [recap, setRecap] = useState("");
+  const [search, setSearch] = useState(false);
+  const [query, setQuery] = useState("");
+  const [ai, setAi] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiText, setAiText] = useState("");
+  const [aiResponse, setAiResponse] = useState("");
+  const [installEvent, setInstallEvent] = useState<InstallEvent | null>(null);
+  const [installHelp, setInstallHelp] = useState(false);
+  useEffect(() => {
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    localStorage.setItem("wellye.theme", dark ? "dark" : "light");
+  }, [dark]);
+  useEffect(() => {
+    const h = () => {
+      const p = location.hash.slice(1).split("/")[0] as Page;
+      if ([...nav.map((n) => n.id), "profile"].includes(p)) setPage(p);
+    };
+    window.addEventListener("hashchange", h);
+    const install = (e: Event) => {
+      e.preventDefault();
+      setInstallEvent(e as InstallEvent);
+    };
+    window.addEventListener("beforeinstallprompt", install);
+    return () => {
+      window.removeEventListener("hashchange", h);
+      window.removeEventListener("beforeinstallprompt", install);
+    };
+  }, []);
+  useEffect(() => {
+    if (!state.profile.onboarded) return;
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    const month = dayKey(d).slice(0, 7);
+    const stats = monthStats(state, month);
+    if (
+      state.recapSeen !== month &&
+      (stats.answers || stats.minutes || stats.days)
+    )
+      setRecap(month);
+  }, [state.profile.onboarded]);
+  useEffect(() => {
+    if (!state.profile.reminderEnabled || Capacitor.isNativePlatform()) return;
+    const check = () => {
+      const now = new Date();
+      const time = now.toTimeString().slice(0, 5);
+      if (
+        time === state.profile.reminder &&
+        localStorage.getItem("wellye.reminded") !== dayKey() &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        localStorage.setItem("wellye.reminded", dayKey());
+        void navigator.serviceWorker?.ready.then((reg) =>
+          reg.showNotification("Um passo de cada vez 💜", {
+            body: "Seu plano no Wellye está esperando por você.",
+            icon: "./icon-192.png",
+            tag: "wellye-study",
+          }),
+        );
+      }
+    };
+    const t = setInterval(check, 20000);
+    check();
+    return () => clearInterval(t);
+  }, [state.profile.reminderEnabled, state.profile.reminder]);
+  const today = dayKey();
+  const signature = planSignature(state);
+  useEffect(() => {
+    if (!state.profile.onboarded) return;
+    if (state.dailyPlans?.[today]?.signature !== signature) {
+      update((s) => ({
+        ...s,
+        dailyPlans: {
+          ...s.dailyPlans,
+          [today]: { signature: planSignature(s), activities: plan(s) },
+        },
+      }));
+    }
+  }, [state.profile.onboarded, today, signature, update]);
+  function navigate(p: Page) {
+    setPage(p);
+    location.hash = p;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  async function install() {
+    if (Capacitor.isNativePlatform()) {
+      toast("Você já está usando o aplicativo Wellye.");
+      return;
+    }
+    if (installEvent) {
+      await installEvent.prompt();
+      await installEvent.userChoice;
+      setInstallEvent(null);
+    } else setInstallHelp(true);
+  }
+  function closeRecap() {
+    update((s) => ({ ...s, recapSeen: recap }));
+    setRecap("");
+  }
+  const recovery = recoveryCode ? (
+    <Modal
+      title="Guarde seu código de recuperação"
+      subtitle="Seu acesso de volta, se um dia esquecer a senha."
+      onClose={() => {}}
+    >
+      <p>
+        Guarde este código em um local seguro. Ele aparece apenas agora e
+        permite redefinir sua senha.
+      </p>
+      <code className="recovery-code">{recoveryCode}</code>
+      <div className="button-row">
+        <button
+          className="button secondary"
+          onClick={() =>
+            navigator.clipboard
+              .writeText(recoveryCode)
+              .then(() => toast("Código copiado."))
+              .catch(() => toast("Selecione o código e copie manualmente."))
+          }
+        >
+          Copiar código
+        </button>
+        <button className="button primary" onClick={dismissRecovery}>
+          Guardei. Continuar
+          <ArrowRight size={16} />
+        </button>
+      </div>
+    </Modal>
+  ) : null;
+  if (!user && !guest) return <Auth />;
+  if (!ready)
+    return (
+      <div className="loading-screen">
+        <Logo />
+        <span>Preparando seu espaço…</span>
+      </div>
+    );
+  if (!state.profile.onboarded)
+    return (
+      <>
+        <Onboarding
+          onComplete={(start) => {
+            if (start) setQuiz({ kind: "diagnostic", count: 5 });
+          }}
+        />
+        {recovery}
+      </>
+    );
+  return (
+    <>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <a href="#home" className="sidebar-logo" aria-label="Wellye início">
+            <Logo />
+          </a>
+          <div className="workspace-label">SEU ESPAÇO DE APRENDIZADO</div>
+          <nav aria-label="Navegação principal">
+            {nav.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                className={page === id ? "active" : ""}
+                onClick={() => navigate(id)}
+              >
+                <Icon size={19} />
+                <span>{label}</span>
+                {id === "goals" && (
+                  <small>{state.goals.filter((g) => g.active).length}</small>
+                )}
+                {page === id && <span className="nav-active-dot" />}
+              </button>
+            ))}
+          </nav>
+          <div className="sidebar-inspiration">
+            <span className="inspire-star">✦</span>
+            <h3>
+              Seu único ritmo
+              <br />é o seu.
+            </h3>
+            <p>
+              Um dia de cada vez.
+              <br />
+              Um passo de cada vez.
+            </p>
+            <div className="inspire-lines" />
+          </div>
+          <div className="sidebar-bottom">
+            <button
+              className={page === "profile" ? "active" : ""}
+              onClick={() => navigate("profile")}
+            >
+              <Settings2 size={18} /> Preferências
+            </button>
+            <button onClick={() => setDark(!dark)}>
+              {dark ? <Moon size={18} /> : <Sun size={18} />}{" "}
+              {dark ? "Modo escuro" : "Modo claro"}
+              <span className={`switch ${dark ? "on" : ""}`} />
+            </button>
+            <div className="sidebar-user">
+              <span className="avatar">
+                {state.profile.name[0]?.toUpperCase()}
+              </span>
+              <div>
+                <strong>{state.profile.name.split(" ")[0]}</strong>
+                <small>
+                  {guest ? "Modo visitante" : "Seu futuro em construção"}
+                </small>
+              </div>
+              <button
+                className="icon-button"
+                aria-label="Meu perfil"
+                onClick={() => navigate("profile")}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </aside>
+        <div className="app-main">
+          <header className="app-header">
+            <div className="breadcrumb">
+              <span>Meu espaço</span>
+              <ChevronRight size={13} />
+              <strong>
+                {page === "profile"
+                  ? "Perfil"
+                  : nav.find((n) => n.id === page)?.label}
+              </strong>
+            </div>
+            <div className="mobile-brand">
+              <Logo />
+            </div>
+            <button className="search-trigger" onClick={() => setSearch(true)}>
+              <Search size={16} />
+              <span>O que vamos aprender hoje?</span>
+              <kbd>⌕</kbd>
+            </button>
+            <div className="header-right">
+              <span className="header-streak">
+                <Flame size={17} />
+                {streak(state)}
+                <span>{streak(state) === 1 ? "dia" : "dias"}</span>
+              </span>
+              <button className="ai-trigger" onClick={() => setAi(true)}>
+                <Sparkles size={16} />
+                <span>Assistente</span>
+              </button>
+              <button
+                className="icon-button header-bell"
+                aria-label="Lembretes e notificações"
+                onClick={() => navigate("profile")}
+              >
+                <Bell size={19} />
+                {state.profile.reminderEnabled && <i />}
+              </button>
+              <button
+                className="avatar header-avatar"
+                aria-label="Meu perfil"
+                onClick={() => navigate("profile")}
+              >
+                {state.profile.name[0]?.toUpperCase()}
+              </button>
+            </div>
+          </header>
+          {!online && (
+            <div className="offline-banner">
+              <WifiOff size={15} /> Você está offline. Continue estudando; seu
+              progresso fica salvo aqui.
+            </div>
+          )}
+          {guest && (
+            <div className="guest-banner">
+              <span>
+                <Sparkles size={13} /> Você está conhecendo o Wellye. Seu
+                progresso fica neste dispositivo.
+              </span>
+              <button
+                onClick={() => {
+                  navigate("profile");
+                }}
+              >
+                Salvar na minha conta
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          )}
+          <main id="main-content">
+            {page === "home" ? (
+              <Home
+                navigate={navigate}
+                startQuiz={setQuiz}
+                openActivity={setActivity}
+              />
+            ) : page === "study" ? (
+              <Study
+                key={location.hash}
+                startQuiz={setQuiz}
+                openActivity={setActivity}
+              />
+            ) : page === "goals" ? (
+              <Goals />
+            ) : page === "performance" ? (
+              <Performance recap={() => setRecap(dayKey().slice(0, 7))} />
+            ) : page === "community" ? (
+              <Community />
+            ) : (
+              <Profile
+                dark={dark}
+                toggleTheme={() => setDark(!dark)}
+                navigate={navigate}
+                install={() => void install()}
+              />
+            )}
+          </main>
+          <footer className="app-footer">
+            <span>
+              Wellye <span>✦</span> Feito para o seu ritmo.
+            </span>
+            <span className="sync-indicator">
+              <i className={!online ? "offline" : ""} />
+              {guest ? "Salvo neste dispositivo" : syncStatus}
+            </span>
+          </footer>
+        </div>
+      </div>
+      <nav className="bottom-nav" aria-label="Navegação no celular">
+        {[
+          ...nav.slice(0, 4),
+          { id: "profile" as Page, label: "Perfil", icon: UserRound },
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            className={`${page === id ? "active" : ""} ${id === "goals" ? "center-goal" : ""}`}
+            onClick={() => navigate(id)}
+          >
+            <span>
+              <Icon size={20} />
+            </span>
+            <small>{label === "Desempenho" ? "Evolução" : label}</small>
+          </button>
+        ))}
+      </nav>
+      {quiz && <Quiz config={quiz} onClose={() => setQuiz(null)} />}{" "}
+      {activity && (
+        <ActivityModal
+          activity={activity}
+          onClose={() => setActivity(null)}
+          startQuiz={setQuiz}
+        />
+      )}{" "}
+      {recap && <Recap month={recap} onClose={closeRecap} />} {recovery}
+      {search && (
+        <Modal
+          title="O que vamos aprender?"
+          onClose={() => {
+            setSearch(false);
+            setQuery("");
+          }}
+        >
+          <div className="input-icon search-input">
+            <Search size={18} />
+            <input
+              autoFocus
+              placeholder="Busque matéria ou assunto…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="search-results">
+            {questions
+              .filter((q) =>
+                `${q.topic} ${q.subject} ${q.lesson}`
+                  .toLowerCase()
+                  .includes(query.toLowerCase()),
+              )
+              .slice(0, 8)
+              .map((q) => (
+                <button
+                  key={q.id}
+                  onClick={() => {
+                    setSearch(false);
+                    setActivity({
+                      id: `search-${q.id}-${dayKey()}`,
+                      subject: q.subject,
+                      topic: q.topic,
+                      title: q.topic,
+                      minutes: 10,
+                      kind: "Leitura",
+                    });
+                  }}
+                >
+                  <SubjectIcon subject={q.subject} />
+                  <span>
+                    <strong>{q.topic}</strong>
+                    <small>{q.subject}</small>
+                  </span>
+                  <ArrowRight size={15} />
+                </button>
+              ))}
+          </div>
+        </Modal>
+      )}
+      {ai && (
+        <Modal
+          title="Um apoio no seu caminho"
+          subtitle="Assistente Wellye · Gemini"
+          onClose={() => setAi(false)}
+        >
+          <p>
+            Conte o que quer entender ou cole um trecho do edital. Quando
+            disponível, o assistente usa seu objetivo e suas matérias para
+            orientar o estudo.
+          </p>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!token) {
+                toast("Entre em uma conta para conversar com o assistente.");
+                return;
+              }
+              setAiBusy(true);
+              try {
+                const result = await request<{ text: string }>(
+                  "ai",
+                  {
+                    prompt: aiText,
+                    context: {
+                      goal: state.goals.find((g) => g.active)?.target,
+                      minutes: state.profile.minutes,
+                      difficulties: state.profile.difficulties,
+                    },
+                  },
+                  token,
+                );
+                setAiResponse(result.text);
+              } catch (e) {
+                setAiResponse(
+                  e instanceof Error
+                    ? e.message
+                    : "O assistente está indisponível agora.",
+                );
+              } finally {
+                setAiBusy(false);
+              }
+            }}
+          >
+            <label>
+              Como posso ajudar?
+              <textarea
+                required
+                rows={4}
+                maxLength={12000}
+                value={aiText}
+                onChange={(e) => setAiText(e.target.value)}
+                placeholder="Ex.: me ajude a entender porcentagem com um exemplo simples."
+              />
+            </label>
+            <button className="button primary full" disabled={aiBusy}>
+              {aiBusy ? "Preparando sua orientação…" : "Pedir uma orientação"}
+              <Sparkles size={16} />
+            </button>
+          </form>
+          {aiResponse && (
+            <div className="ai-response" role="status">
+              {aiResponse}
+            </div>
+          )}
+          <p className="fineprint">
+            Confira informações importantes na fonte oficial. O assistente não
+            verifica automaticamente o último edital.
+          </p>
+        </Modal>
+      )}
+      {installHelp && (
+        <Modal
+          title="Wellye sempre por perto"
+          onClose={() => setInstallHelp(false)}
+        >
+          <div className="install-options">
+            <h3>No Android</h3>
+            <p>
+              No menu do Chrome, escolha “Instalar aplicativo” ou “Adicionar à
+              tela inicial”. O APK também fica disponível nas execuções do
+              GitHub Actions após a compilação.
+            </p>
+            <h3>No iPhone ou iPad</h3>
+            <p>
+              No Safari, toque em Compartilhar e depois em “Adicionar à Tela de
+              Início”.
+            </p>
+            <h3>No computador</h3>
+            <p>
+              No Chrome ou Edge, use o ícone de instalação na barra de
+              endereços, quando disponível.
+            </p>
+            <a
+              className="button secondary full"
+              href="https://github.com/Delta-1/Wellye/actions"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Ver compilações do aplicativo
+              <ArrowRight size={16} />
+            </a>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
 }

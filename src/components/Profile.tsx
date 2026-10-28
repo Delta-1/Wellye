@@ -1,13 +1,381 @@
-import { useState } from 'react';
-import { ArrowRight, Bell, Check, Download, LogOut, Moon, ShieldCheck, Smartphone, Sun, Trash2, Upload, Users } from 'lucide-react';
-import { useApp } from '../lib/store';
-import { configureReminder } from '../lib/notifications';
-import { request } from '../lib/api';
-import { validateState } from '../lib/study';
-import type { Page } from '../lib/types';
-import { Modal, SectionHead, Tag } from './UI';
-export default function Profile({dark,toggleTheme,navigate,install}:{dark:boolean;toggleTheme:()=>void;navigate:(p:Page)=>void;install:()=>void}){
- const {state,update,user,token,guest,logout,toast,syncStatus,sync}=useApp();const [deleting,setDeleting]=useState(false);const [busy,setBusy]=useState(false);const [privacy,setPrivacy]=useState(false);
- function exportData(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='wellye-meu-progresso.json';a.click();URL.revokeObjectURL(url);toast('Uma cópia do seu progresso foi baixada. Guarde-a com cuidado.');}
- return <div className="page"><div className="page-title"><div><p className="eyebrow">UM ESPAÇO QUE É SEU</p><h1>Do seu jeito<span>.</span></h1><p>Seu ritmo, suas preferências e o cuidado com seus dados.</p></div><Tag color="green">{guest?'Visitante':syncStatus}</Tag></div><section className="profile-banner"><div className="profile-avatar">{state.profile.name[0]?.toUpperCase()}</div><div><h2>{state.profile.name}</h2><p>{user?.email??'Explorando o Wellye neste dispositivo'}</p><Tag>{guest?'Progresso local':'Conta exclusiva Wellye'}</Tag></div><button className="button secondary" onClick={guest?logout:()=>void sync()}>{guest?'Criar minha conta':'Sincronizar agora'}<ArrowRight size={15}/></button></section><div className="settings-grid"><section className="card"><SectionHead title="Seu ritmo"/><form onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);update(s=>({...s,profile:{...s.profile,name:String(f.get('name')).trim(),minutes:Number(f.get('minutes'))}}));toast('Seu ritmo foi atualizado.');}}><label>Como podemos chamar você?<input name="name" defaultValue={state.profile.name} required minLength={2} maxLength={60}/></label><label>Tempo disponível por dia<select name="minutes" defaultValue={state.profile.minutes}>{[15,30,45,60,90,120].map(n=><option value={n} key={n}>{n} minutos</option>)}</select></label><button className="button primary full">Salvar meu ritmo<Check size={16}/></button></form></section><section className="card"><SectionHead title="Um lembrete gentil"><Bell size={18}/></SectionHead><p>Reserve um momento para você. Sem culpa se hoje não der.</p><form onSubmit={async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const enabled=f.get('enabled')==='on';const time=String(f.get('time'));try{await configureReminder(enabled,time);update(s=>({...s,profile:{...s.profile,reminder:time,reminderEnabled:enabled}}));toast(enabled?'Seu lembrete está ativado.':'Lembrete desativado.');}catch(e){toast(e instanceof Error?e.message:'Não foi possível ativar.');}}}><label>Meu horário de estudo<input name="time" type="time" required defaultValue={state.profile.reminder}/></label><label className="toggle-label"><input name="enabled" type="checkbox" defaultChecked={state.profile.reminderEnabled}/> Quero receber um lembrete de estudo</label><p className="fineprint">No Android instalado, o lembrete pode chegar com o app fechado. No navegador, funciona enquanto o Wellye está aberto.</p><button className="button secondary full">Salvar lembrete<Bell size={16}/></button></form></section><section className="card"><SectionHead title="Conforto para aprender"/><button className="setting-row" onClick={toggleTheme}><span className="tool-icon purple">{dark?<Moon size={19}/>:<Sun size={19}/>}</span><span><strong>{dark?'Modo escuro':'Modo claro'}</strong><small>Um ambiente que combina com você</small></span><span className={`switch ${dark?'on':''}`}/></button><button className="setting-row" onClick={install}><span className="tool-icon green"><Smartphone size={19}/></span><span><strong>Leve o Wellye com você</strong><small>Instalar no celular ou computador</small></span><ArrowRight size={17}/></button><button className="setting-row" onClick={()=>navigate('community')}><span className="tool-icon orange"><Users size={19}/></span><span><strong>Seu espaço na comunidade</strong><small>Participação opcional, no seu ritmo</small></span><ArrowRight size={17}/></button></section><section className="card"><SectionHead title="Seus dados, com você"><ShieldCheck size={18}/></SectionHead><button className="setting-row" onClick={exportData}><Download size={19}/><span><strong>Baixar meu progresso</strong><small>Uma cópia dos seus estudos em JSON</small></span><ArrowRight size={16}/></button><label className="setting-row import-label"><Upload size={19}/><span><strong>Restaurar uma cópia</strong><small>Substitui o progresso desta conta</small></span><input type="file" accept="application/json,.json" onChange={async e=>{const file=e.target.files?.[0];if(!file)return;if(file.size>2_000_000){toast('Escolha uma cópia com até 2 MB.');return;}try{const data=JSON.parse(await file.text());if(!validateState(data))throw new Error('invalid');if(window.confirm('Restaurar esta cópia substituirá seu progresso atual. Deseja continuar?')){update(()=>data);toast('Seu progresso foi restaurado.');}}catch{toast('Esse arquivo não é uma cópia válida do Wellye.');}e.target.value='';}}/></label><button className="setting-row" onClick={()=>setPrivacy(true)}><ShieldCheck size={19}/><span><strong>Como cuidamos dos seus dados</strong><small>Transparência em cada passo</small></span><ArrowRight size={16}/></button></section></div><div className="profile-bottom"><button className="button secondary" onClick={logout}><LogOut size={16}/>{guest?'Sair do modo visitante':'Sair da minha conta'}</button>{!guest&&<button className="text-button danger-text" onClick={()=>setDeleting(true)}><Trash2 size={15}/>Excluir minha conta</button>}<span>Wellye 1.0 · Seu estudo. Seu ritmo. Seu futuro.</span></div>{deleting&&<Modal title="Excluir sua conta Wellye?" onClose={()=>setDeleting(false)}><p>Esta ação apaga sua conta, sessões, publicações e progresso do Wellye. Digite sua senha para confirmar.</p><form onSubmit={async e=>{e.preventDefault();setBusy(true);const password=String(new FormData(e.currentTarget).get('password'));try{await request('delete_account',{password},token);if(user){localStorage.removeItem(`wellye.data.${user.id}`);localStorage.removeItem(`wellye.data.${user.id}.pending`);localStorage.removeItem(`wellye.data.${user.id}.revision`);}logout();toast('Sua conta Wellye foi excluída.');}catch(e){toast(e instanceof Error?e.message:'Não foi possível excluir agora.');}finally{setBusy(false);}}}><label>Senha atual<input name="password" type="password" required autoComplete="current-password"/></label><button className="button danger full" disabled={busy}>{busy?'Excluindo…':'Excluir definitivamente minha conta'}<Trash2 size={16}/></button></form></Modal>}{privacy&&<Modal title="Um cuidado que faz parte do caminho" onClose={()=>setPrivacy(false)}><div className="privacy-copy"><h3>Conta independente</h3><p>Seu cadastro, senha e sessões pertencem ao Wellye. A infraestrutura de banco é compartilhada, mas os registros de login deste app são separados.</p><h3>Seu progresso</h3><p>Respostas, objetivos, preferências e atividades são salvos neste dispositivo e, quando você entra em uma conta, sincronizados com o servidor.</p><h3>Comunidade opcional</h3><p>Seu apelido, mensagens e quantidade semanal de questões só ficam públicos se você ativar a participação. Seu e-mail e suas dificuldades não são publicados.</p><h3>Assistente</h3><p>Quando disponível e solicitado, o assistente envia ao provedor Gemini seu pedido, o objetivo de estudo e um resumo das matérias. Senha e e-mail não são enviados.</p><h3>Controle nas suas mãos</h3><p>Você pode baixar seu progresso, sair da comunidade ou excluir sua conta. Em dispositivos compartilhados, apague também os dados locais pelo navegador depois de sair.</p></div></Modal>}</div>;
+import { useState } from "react";
+import {
+  ArrowRight,
+  Bell,
+  Check,
+  Download,
+  LogOut,
+  Moon,
+  ShieldCheck,
+  Smartphone,
+  Sun,
+  Trash2,
+  Upload,
+  Users,
+} from "lucide-react";
+import { useApp } from "../lib/store";
+import { configureReminder } from "../lib/notifications";
+import { request } from "../lib/api";
+import { validateState } from "../lib/study";
+import type { Page } from "../lib/types";
+import { Modal, SectionHead, Tag } from "./UI";
+export default function Profile({
+  dark,
+  toggleTheme,
+  navigate,
+  install,
+}: {
+  dark: boolean;
+  toggleTheme: () => void;
+  navigate: (p: Page) => void;
+  install: () => void;
+}) {
+  const { state, update, user, token, guest, logout, toast, syncStatus, sync } =
+    useApp();
+  const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [privacy, setPrivacy] = useState(false);
+  function exportData() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "wellye-meu-progresso.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Uma cópia do seu progresso foi baixada. Guarde-a com cuidado.");
+  }
+  return (
+    <div className="page">
+      <div className="page-title">
+        <div>
+          <p className="eyebrow">UM ESPAÇO QUE É SEU</p>
+          <h1>
+            Do seu jeito<span>.</span>
+          </h1>
+          <p>Seu ritmo, suas preferências e o cuidado com seus dados.</p>
+        </div>
+        <Tag color="green">{guest ? "Visitante" : syncStatus}</Tag>
+      </div>
+      <section className="profile-banner">
+        <div className="profile-avatar">
+          {state.profile.name[0]?.toUpperCase()}
+        </div>
+        <div>
+          <h2>{state.profile.name}</h2>
+          <p>{user?.email ?? "Explorando o Wellye neste dispositivo"}</p>
+          <Tag>{guest ? "Progresso local" : "Conta exclusiva Wellye"}</Tag>
+        </div>
+        <button
+          className="button secondary"
+          onClick={guest ? logout : () => void sync()}
+        >
+          {guest ? "Criar minha conta" : "Sincronizar agora"}
+          <ArrowRight size={15} />
+        </button>
+      </section>
+      <div className="settings-grid">
+        <section className="card">
+          <SectionHead title="Seu ritmo" />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              update((s) => ({
+                ...s,
+                profile: {
+                  ...s.profile,
+                  name: String(f.get("name")).trim(),
+                  minutes: Number(f.get("minutes")),
+                },
+              }));
+              toast("Seu ritmo foi atualizado.");
+            }}
+          >
+            <label>
+              Como podemos chamar você?
+              <input
+                name="name"
+                defaultValue={state.profile.name}
+                required
+                minLength={2}
+                maxLength={60}
+              />
+            </label>
+            <label>
+              Tempo disponível por dia
+              <select name="minutes" defaultValue={state.profile.minutes}>
+                {[15, 30, 45, 60, 90, 120].map((n) => (
+                  <option value={n} key={n}>
+                    {n} minutos
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="button primary full">
+              Salvar meu ritmo
+              <Check size={16} />
+            </button>
+          </form>
+        </section>
+        <section className="card">
+          <SectionHead title="Um lembrete gentil">
+            <Bell size={18} />
+          </SectionHead>
+          <p>Reserve um momento para você. Sem culpa se hoje não der.</p>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              const enabled = f.get("enabled") === "on";
+              const time = String(f.get("time"));
+              try {
+                await configureReminder(enabled, time);
+                update((s) => ({
+                  ...s,
+                  profile: {
+                    ...s.profile,
+                    reminder: time,
+                    reminderEnabled: enabled,
+                  },
+                }));
+                toast(
+                  enabled
+                    ? "Seu lembrete está ativado."
+                    : "Lembrete desativado.",
+                );
+              } catch (e) {
+                toast(
+                  e instanceof Error ? e.message : "Não foi possível ativar.",
+                );
+              }
+            }}
+          >
+            <label>
+              Meu horário de estudo
+              <input
+                name="time"
+                type="time"
+                required
+                defaultValue={state.profile.reminder}
+              />
+            </label>
+            <label className="toggle-label">
+              <input
+                name="enabled"
+                type="checkbox"
+                defaultChecked={state.profile.reminderEnabled}
+              />{" "}
+              Quero receber um lembrete de estudo
+            </label>
+            <p className="fineprint">
+              No Android instalado, o lembrete pode chegar com o app fechado. No
+              navegador, funciona enquanto o Wellye está aberto.
+            </p>
+            <button className="button secondary full">
+              Salvar lembrete
+              <Bell size={16} />
+            </button>
+          </form>
+        </section>
+        <section className="card">
+          <SectionHead title="Conforto para aprender" />
+          <button className="setting-row" onClick={toggleTheme}>
+            <span className="tool-icon purple">
+              {dark ? <Moon size={19} /> : <Sun size={19} />}
+            </span>
+            <span>
+              <strong>{dark ? "Modo escuro" : "Modo claro"}</strong>
+              <small>Um ambiente que combina com você</small>
+            </span>
+            <span className={`switch ${dark ? "on" : ""}`} />
+          </button>
+          <button className="setting-row" onClick={install}>
+            <span className="tool-icon green">
+              <Smartphone size={19} />
+            </span>
+            <span>
+              <strong>Leve o Wellye com você</strong>
+              <small>Instalar no celular ou computador</small>
+            </span>
+            <ArrowRight size={17} />
+          </button>
+          <button className="setting-row" onClick={() => navigate("community")}>
+            <span className="tool-icon orange">
+              <Users size={19} />
+            </span>
+            <span>
+              <strong>Seu espaço na comunidade</strong>
+              <small>Participação opcional, no seu ritmo</small>
+            </span>
+            <ArrowRight size={17} />
+          </button>
+        </section>
+        <section className="card">
+          <SectionHead title="Seus dados, com você">
+            <ShieldCheck size={18} />
+          </SectionHead>
+          <button className="setting-row" onClick={exportData}>
+            <Download size={19} />
+            <span>
+              <strong>Baixar meu progresso</strong>
+              <small>Uma cópia dos seus estudos em JSON</small>
+            </span>
+            <ArrowRight size={16} />
+          </button>
+          <label className="setting-row import-label">
+            <Upload size={19} />
+            <span>
+              <strong>Restaurar uma cópia</strong>
+              <small>Substitui o progresso desta conta</small>
+            </span>
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (file.size > 2_000_000) {
+                  toast("Escolha uma cópia com até 2 MB.");
+                  return;
+                }
+                try {
+                  const data = JSON.parse(await file.text());
+                  if (!validateState(data)) throw new Error("invalid");
+                  if (
+                    window.confirm(
+                      "Restaurar esta cópia substituirá seu progresso atual. Deseja continuar?",
+                    )
+                  ) {
+                    update(() => data);
+                    toast("Seu progresso foi restaurado.");
+                  }
+                } catch {
+                  toast("Esse arquivo não é uma cópia válida do Wellye.");
+                }
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button className="setting-row" onClick={() => setPrivacy(true)}>
+            <ShieldCheck size={19} />
+            <span>
+              <strong>Como cuidamos dos seus dados</strong>
+              <small>Transparência em cada passo</small>
+            </span>
+            <ArrowRight size={16} />
+          </button>
+        </section>
+      </div>
+      <div className="profile-bottom">
+        <button className="button secondary" onClick={logout}>
+          <LogOut size={16} />
+          {guest ? "Sair do modo visitante" : "Sair da minha conta"}
+        </button>
+        {!guest && (
+          <button
+            className="text-button danger-text"
+            onClick={() => setDeleting(true)}
+          >
+            <Trash2 size={15} />
+            Excluir minha conta
+          </button>
+        )}
+        <span>Wellye 1.0 · Seu estudo. Seu ritmo. Seu futuro.</span>
+      </div>
+      {deleting && (
+        <Modal
+          title="Excluir sua conta Wellye?"
+          onClose={() => setDeleting(false)}
+        >
+          <p>
+            Esta ação apaga sua conta, sessões, publicações e progresso do
+            Wellye. Digite sua senha para confirmar.
+          </p>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setBusy(true);
+              const password = String(
+                new FormData(e.currentTarget).get("password"),
+              );
+              try {
+                await request("delete_account", { password }, token);
+                if (user) {
+                  localStorage.removeItem(`wellye.data.${user.id}`);
+                  localStorage.removeItem(`wellye.data.${user.id}.pending`);
+                  localStorage.removeItem(`wellye.data.${user.id}.revision`);
+                }
+                logout();
+                toast("Sua conta Wellye foi excluída.");
+              } catch (e) {
+                toast(
+                  e instanceof Error
+                    ? e.message
+                    : "Não foi possível excluir agora.",
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <label>
+              Senha atual
+              <input
+                name="password"
+                type="password"
+                required
+                autoComplete="current-password"
+              />
+            </label>
+            <button className="button danger full" disabled={busy}>
+              {busy ? "Excluindo…" : "Excluir definitivamente minha conta"}
+              <Trash2 size={16} />
+            </button>
+          </form>
+        </Modal>
+      )}
+      {privacy && (
+        <Modal
+          title="Um cuidado que faz parte do caminho"
+          onClose={() => setPrivacy(false)}
+        >
+          <div className="privacy-copy">
+            <h3>Conta independente</h3>
+            <p>
+              Seu cadastro, senha e sessões pertencem ao Wellye. A
+              infraestrutura de banco é compartilhada, mas os registros de login
+              deste app são separados.
+            </p>
+            <h3>Seu progresso</h3>
+            <p>
+              Respostas, objetivos, preferências e atividades são salvos neste
+              dispositivo e, quando você entra em uma conta, sincronizados com o
+              servidor.
+            </p>
+            <h3>Comunidade opcional</h3>
+            <p>
+              Seu apelido, mensagens e quantidade semanal de questões só ficam
+              públicos se você ativar a participação. Seu e-mail e suas
+              dificuldades não são publicados.
+            </p>
+            <h3>Assistente</h3>
+            <p>
+              Quando disponível e solicitado, o assistente envia ao provedor
+              Gemini seu pedido, o objetivo de estudo e um resumo das matérias.
+              Senha e e-mail não são enviados.
+            </p>
+            <h3>Controle nas suas mãos</h3>
+            <p>
+              Você pode baixar seu progresso, sair da comunidade ou excluir sua
+              conta. Em dispositivos compartilhados, apague também os dados
+              locais pelo navegador depois de sair.
+            </p>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
 }

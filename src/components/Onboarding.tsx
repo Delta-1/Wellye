@@ -1,19 +1,433 @@
-import { newId } from '../lib/id';
-import { useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Building2, Check, ChevronRight, Clock3, GraduationCap, Headphones, Layers, Play, Search, Sparkles, Target, Trophy } from 'lucide-react';
-import { useApp } from '../lib/store';
-import { relevantSubjects } from '../lib/questions';
-import type { Goal, GoalType, LearnFormat, Subject } from '../lib/types';
-import { goalLabels, Logo } from './UI';
-const goalInfo:[GoalType,typeof BookOpen,string][]=[['escolar',BookOpen,'Aprender melhor e ir bem na escola'],['enem',GraduationCap,'Abrir as portas para o próximo capítulo'],['vestibular',Building2,'Conquistar minha vaga na universidade'],['concurso',Trophy,'Preparar meu caminho para a aprovação'],['outros',Target,'Aprender algo que faz sentido para mim']];
-export function GoalForm({onSave,onCancel}:{onSave:(g:Goal)=>void;onCancel?:()=>void}){
- const [type,setType]=useState<GoalType>('enem');const [board,setBoard]=useState('FGV');const [target,setTarget]=useState('');const [name,setName]=useState('');const [date,setDate]=useState('');const [query,setQuery]=useState('');
- const boards=['FGV','Cebraspe','FCC','Vunesp','IBFC','Instituto AOCP','Quadrix','Consulplan','Cesgranrio','IDECAN','Outras'];
- return <form onSubmit={e=>{e.preventDefault();onSave({id:newId(),type,name:name.trim()||goalLabels[type],board:type==='concurso'?board:'',target:target.trim(),date,active:true});}}><div className="goal-grid">{goalInfo.map(([id,Icon,desc])=><button key={id} type="button" className={`goal-option ${type===id?'selected':''}`} aria-pressed={type===id} onClick={()=>{setType(id);setTarget('');}}><span className="goal-symbol"><Icon size={23}/></span><span><strong>{goalLabels[id]}</strong><small>{desc}</small></span><span className="radio">{type===id&&<Check size={13}/>}</span></button>)}</div><div className="form-grid"><label>{type==='escolar'?'Escola e série':type==='enem'?'Curso ou universidade dos seus sonhos':type==='vestibular'?'Universidade ou vestibular':type==='concurso'?'Concurso e cargo':'O que você quer aprender?'}<input placeholder={type==='concurso'?'Ex.: INSS · Técnico do Seguro Social':type==='escolar'?'Ex.: 2º ano · Ensino Médio':type==='enem'?'Ex.: Medicina · universidade pública':'Dê um nome ao seu objetivo'} value={target} onChange={e=>setTarget(e.target.value)} maxLength={160} required/></label><label>Data da prova <span className="muted">(opcional)</span><input type="date" value={date} onChange={e=>setDate(e.target.value)} min={new Date().toISOString().slice(0,10)}/></label></div>{type==='outros'&&<label>Nome do objetivo<input placeholder="Ex.: Reforçar minha base" value={name} onChange={e=>setName(e.target.value)} maxLength={80}/></label>}{type==='concurso'&&<div className="board-picker"><label>Banca organizadora<div className="input-icon"><Search size={17}/><input placeholder="Buscar banca" value={query} onChange={e=>setQuery(e.target.value)}/></div></label><div className="boards">{boards.filter(b=>b.toLowerCase().includes(query.toLowerCase())).map(b=><button type="button" key={b} className={b===board?'selected':''} onClick={()=>setBoard(b)}>{b===board?<Check size={15}/>:<Building2 size={15}/>} {b}</button>)}</div><p className="fineprint">O plano inicial usa conteúdos de base. Consulte o edital oficial para conferir as matérias do seu cargo.</p></div>}<div className="form-actions">{onCancel&&<button type="button" className="button secondary" onClick={onCancel}>Voltar</button>}<button className="button primary">{onCancel?'Adicionar objetivo':'Continuar'}<ArrowRight size={17}/></button></div></form>;
+import { newId } from "../lib/id";
+import { useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  Building2,
+  Check,
+  ChevronRight,
+  Clock3,
+  GraduationCap,
+  Headphones,
+  Layers,
+  Play,
+  Search,
+  Sparkles,
+  Target,
+  Trophy,
+} from "lucide-react";
+import { useApp } from "../lib/store";
+import { relevantSubjects } from "../lib/questions";
+import type { Goal, GoalType, LearnFormat, Subject } from "../lib/types";
+import { goalLabels, Logo } from "./UI";
+const goalInfo: [GoalType, typeof BookOpen, string][] = [
+  ["escolar", BookOpen, "Aprender melhor e ir bem na escola"],
+  ["enem", GraduationCap, "Abrir as portas para o próximo capítulo"],
+  ["vestibular", Building2, "Conquistar minha vaga na universidade"],
+  ["concurso", Trophy, "Preparar meu caminho para a aprovação"],
+  ["outros", Target, "Aprender algo que faz sentido para mim"],
+];
+export function GoalForm({
+  onSave,
+  onCancel,
+}: {
+  onSave: (g: Goal) => void;
+  onCancel?: () => void;
+}) {
+  const [type, setType] = useState<GoalType>("enem");
+  const [board, setBoard] = useState("FGV");
+  const [target, setTarget] = useState("");
+  const [name, setName] = useState("");
+  const [date, setDate] = useState("");
+  const [query, setQuery] = useState("");
+  const boards = [
+    "FGV",
+    "Cebraspe",
+    "FCC",
+    "Vunesp",
+    "IBFC",
+    "Instituto AOCP",
+    "Quadrix",
+    "Consulplan",
+    "Cesgranrio",
+    "IDECAN",
+    "Outras",
+  ];
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({
+          id: newId(),
+          type,
+          name: name.trim() || goalLabels[type],
+          board: type === "concurso" ? board : "",
+          target: target.trim(),
+          date,
+          active: true,
+        });
+      }}
+    >
+      <div className="goal-grid">
+        {goalInfo.map(([id, Icon, desc]) => (
+          <button
+            key={id}
+            type="button"
+            className={`goal-option ${type === id ? "selected" : ""}`}
+            aria-pressed={type === id}
+            onClick={() => {
+              setType(id);
+              setTarget("");
+            }}
+          >
+            <span className="goal-symbol">
+              <Icon size={23} />
+            </span>
+            <span>
+              <strong>{goalLabels[id]}</strong>
+              <small>{desc}</small>
+            </span>
+            <span className="radio">{type === id && <Check size={13} />}</span>
+          </button>
+        ))}
+      </div>
+      <div className="form-grid">
+        <label>
+          {type === "escolar"
+            ? "Escola e série"
+            : type === "enem"
+              ? "Curso ou universidade dos seus sonhos"
+              : type === "vestibular"
+                ? "Universidade ou vestibular"
+                : type === "concurso"
+                  ? "Concurso e cargo"
+                  : "O que você quer aprender?"}
+          <input
+            placeholder={
+              type === "concurso"
+                ? "Ex.: INSS · Técnico do Seguro Social"
+                : type === "escolar"
+                  ? "Ex.: 2º ano · Ensino Médio"
+                  : type === "enem"
+                    ? "Ex.: Medicina · universidade pública"
+                    : "Dê um nome ao seu objetivo"
+            }
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            maxLength={160}
+            required
+          />
+        </label>
+        <label>
+          Data da prova <span className="muted">(opcional)</span>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            min={new Date().toISOString().slice(0, 10)}
+          />
+        </label>
+      </div>
+      {type === "outros" && (
+        <label>
+          Nome do objetivo
+          <input
+            placeholder="Ex.: Reforçar minha base"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={80}
+          />
+        </label>
+      )}
+      {type === "concurso" && (
+        <div className="board-picker">
+          <label>
+            Banca organizadora
+            <div className="input-icon">
+              <Search size={17} />
+              <input
+                placeholder="Buscar banca"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          </label>
+          <div className="boards">
+            {boards
+              .filter((b) => b.toLowerCase().includes(query.toLowerCase()))
+              .map((b) => (
+                <button
+                  type="button"
+                  key={b}
+                  className={b === board ? "selected" : ""}
+                  onClick={() => setBoard(b)}
+                >
+                  {b === board ? <Check size={15} /> : <Building2 size={15} />}{" "}
+                  {b}
+                </button>
+              ))}
+          </div>
+          <p className="fineprint">
+            O plano inicial usa conteúdos de base. Consulte o edital oficial
+            para conferir as matérias do seu cargo.
+          </p>
+        </div>
+      )}
+      <div className="form-actions">
+        {onCancel && (
+          <button type="button" className="button secondary" onClick={onCancel}>
+            Voltar
+          </button>
+        )}
+        <button className="button primary">
+          {onCancel ? "Adicionar objetivo" : "Continuar"}
+          <ArrowRight size={17} />
+        </button>
+      </div>
+    </form>
+  );
 }
-export default function Onboarding({onComplete}:{onComplete:(start?:boolean)=>void}){
- const {state,update,guest}=useApp();const [step,setStep]=useState(0);const [goal,setGoal]=useState<Goal|null>(null);const [minutes,setMinutes]=useState(state.profile.minutes);const [difficulties,setDifficulties]=useState<Subject[]>([]);const [formats,setFormats]=useState<LearnFormat[]>(['Leitura','Exercícios']);
- function finish(){update(s=>({...s,profile:{...s.profile,minutes,difficulties,formats,onboarded:true},goals:goal?[goal]:s.goals}));onComplete(true);}
- const icons:Record<LearnFormat,typeof BookOpen>={Leitura:BookOpen,Vídeo:Play,Exercícios:Check,Áudio:Headphones,'Mapa mental':Layers};
- return <div className="onboarding"><header><Logo/><span>{guest?'Modo visitante':'Seu espaço de aprendizado'} <Sparkles size={15}/></span></header><div className="onboarding-layout"><aside><p className="eyebrow">UM COMEÇO DO SEU JEITO</p><h1>Grandes caminhos.<br/><span>Pequenos passos.</span></h1><p>Vamos criar uma rotina que cabe na sua vida. Sem pressa, sem comparação.</p><div className="onboarding-steps">{['Seu objetivo','Seu jeito de aprender','Seu ponto de partida'].map((s,i)=><div key={s} className={step===i?'active':step>i?'done':''}><span>{step>i?<Check size={17}/>:String(i+1).padStart(2,'0')}</span><div><strong>{s}</strong><small>{['Para onde você quer ir','O que funciona para você','Para começar na medida certa'][i]}</small></div></div>)}</div><div className="soft-note"><Headphones size={20}/><p>Você pode ajustar tudo depois.<br/>O seu plano acompanha você.</p></div></aside><main className="onboarding-card"><div className="step-count">PASSO {step+1} DE 3 <span>✦</span></div>{step===0?<><h2>Qual é o seu objetivo?</h2><p>Um destino ajuda a gente a escolher o caminho.</p><GoalForm onSave={g=>{setGoal(g);setStep(1);}}/></>:step===1?<><button className="text-button" onClick={()=>setStep(0)}><ArrowLeft size={15}/> Voltar</button><h2>Vamos te conhecer melhor.</h2><p>O melhor plano é aquele que funciona na sua vida.</p><label>Quanto tempo você tem por dia?</label><div className="time-options">{[15,30,45,60,90,120].map(m=><button className={minutes===m?'selected':''} key={m} onClick={()=>setMinutes(m)}><Clock3 size={16}/>{m<60?`${m} min`:`${m/60} h`}</button>)}</div><label>Quais matérias precisam de mais atenção? <small>Até 3</small></label><div className="chips">{relevantSubjects(goal?.type??'enem').map(s=><button key={s} className={difficulties.includes(s)?'selected':''} aria-pressed={difficulties.includes(s)} onClick={()=>setDifficulties(v=>v.includes(s)?v.filter(x=>x!==s):v.length<3?[...v,s]:v)}>{difficulties.includes(s)&&<Check size={13}/>} {s}</button>)}</div><label>Como você gosta de aprender?</label><div className="format-grid">{(Object.keys(icons) as LearnFormat[]).map(f=>{const Icon=icons[f];return <button key={f} className={formats.includes(f)?'selected':''} aria-pressed={formats.includes(f)} onClick={()=>setFormats(v=>v.includes(f)?v.filter(x=>x!==f):[...v,f])}><Icon size={24}/>{f}</button>;})}</div><div className="form-actions"><button className="button primary full" disabled={!formats.length} onClick={()=>setStep(2)}>Esse é o meu ritmo<ArrowRight size={17}/></button></div></>:<><div className="diagnostic-symbol"><Sparkles size={42}/></div><h2>Todo começo é um<br/>bom ponto de partida.</h2><p>Vamos fazer 5 questões, do básico ao mais desafiador, para entender o que você já sabe.</p><div className="diagnostic-details"><span><Check size={17}/> Sem nota mínima, sem pressão</span><span><Check size={17}/> Explicação para cada alternativa</span><span><Check size={17}/> Um plano a partir das suas respostas</span></div><button className="button primary full" onClick={finish}>Descobrir meu ponto de partida<ChevronRight size={17}/></button><button className="text-button center" onClick={()=>{update(s=>({...s,profile:{...s.profile,minutes,difficulties,formats,onboarded:true,diagnosticDone:false},goals:goal?[goal]:s.goals}));onComplete();}}>Quero explorar primeiro</button></>}</main></div><footer>Seu estudo. Seu ritmo. Seu futuro.</footer></div>;
+export default function Onboarding({
+  onComplete,
+}: {
+  onComplete: (start?: boolean) => void;
+}) {
+  const { state, update, guest } = useApp();
+  const [step, setStep] = useState(0);
+  const [goal, setGoal] = useState<Goal | null>(null);
+  const [minutes, setMinutes] = useState(state.profile.minutes);
+  const [difficulties, setDifficulties] = useState<Subject[]>([]);
+  const [formats, setFormats] = useState<LearnFormat[]>([
+    "Leitura",
+    "Exercícios",
+  ]);
+  function finish() {
+    update((s) => ({
+      ...s,
+      profile: {
+        ...s.profile,
+        minutes,
+        difficulties,
+        formats,
+        onboarded: true,
+      },
+      goals: goal ? [goal] : s.goals,
+    }));
+    onComplete(true);
+  }
+  const icons: Record<LearnFormat, typeof BookOpen> = {
+    Leitura: BookOpen,
+    Vídeo: Play,
+    Exercícios: Check,
+    Áudio: Headphones,
+    "Mapa mental": Layers,
+  };
+  return (
+    <div className="onboarding">
+      <header>
+        <Logo />
+        <span>
+          {guest ? "Modo visitante" : "Seu espaço de aprendizado"}{" "}
+          <Sparkles size={15} />
+        </span>
+      </header>
+      <div className="onboarding-layout">
+        <aside>
+          <p className="eyebrow">UM COMEÇO DO SEU JEITO</p>
+          <h1>
+            Grandes caminhos.
+            <br />
+            <span>Pequenos passos.</span>
+          </h1>
+          <p>
+            Vamos criar uma rotina que cabe na sua vida. Sem pressa, sem
+            comparação.
+          </p>
+          <div className="onboarding-steps">
+            {[
+              "Seu objetivo",
+              "Seu jeito de aprender",
+              "Seu ponto de partida",
+            ].map((s, i) => (
+              <div
+                key={s}
+                className={step === i ? "active" : step > i ? "done" : ""}
+              >
+                <span>
+                  {step > i ? (
+                    <Check size={17} />
+                  ) : (
+                    String(i + 1).padStart(2, "0")
+                  )}
+                </span>
+                <div>
+                  <strong>{s}</strong>
+                  <small>
+                    {
+                      [
+                        "Para onde você quer ir",
+                        "O que funciona para você",
+                        "Para começar na medida certa",
+                      ][i]
+                    }
+                  </small>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="soft-note">
+            <Headphones size={20} />
+            <p>
+              Você pode ajustar tudo depois.
+              <br />O seu plano acompanha você.
+            </p>
+          </div>
+        </aside>
+        <main className="onboarding-card">
+          <div className="step-count">
+            PASSO {step + 1} DE 3 <span>✦</span>
+          </div>
+          {step === 0 ? (
+            <>
+              <h2>Qual é o seu objetivo?</h2>
+              <p>Um destino ajuda a gente a escolher o caminho.</p>
+              <GoalForm
+                onSave={(g) => {
+                  setGoal(g);
+                  setStep(1);
+                }}
+              />
+            </>
+          ) : step === 1 ? (
+            <>
+              <button className="text-button" onClick={() => setStep(0)}>
+                <ArrowLeft size={15} /> Voltar
+              </button>
+              <h2>Vamos te conhecer melhor.</h2>
+              <p>O melhor plano é aquele que funciona na sua vida.</p>
+              <label>Quanto tempo você tem por dia?</label>
+              <div className="time-options">
+                {[15, 30, 45, 60, 90, 120].map((m) => (
+                  <button
+                    className={minutes === m ? "selected" : ""}
+                    key={m}
+                    onClick={() => setMinutes(m)}
+                  >
+                    <Clock3 size={16} />
+                    {m < 60 ? `${m} min` : `${m / 60} h`}
+                  </button>
+                ))}
+              </div>
+              <label>
+                Quais matérias precisam de mais atenção? <small>Até 3</small>
+              </label>
+              <div className="chips">
+                {relevantSubjects(goal?.type ?? "enem").map((s) => (
+                  <button
+                    key={s}
+                    className={difficulties.includes(s) ? "selected" : ""}
+                    aria-pressed={difficulties.includes(s)}
+                    onClick={() =>
+                      setDifficulties((v) =>
+                        v.includes(s)
+                          ? v.filter((x) => x !== s)
+                          : v.length < 3
+                            ? [...v, s]
+                            : v,
+                      )
+                    }
+                  >
+                    {difficulties.includes(s) && <Check size={13} />} {s}
+                  </button>
+                ))}
+              </div>
+              <label>Como você gosta de aprender?</label>
+              <div className="format-grid">
+                {(Object.keys(icons) as LearnFormat[]).map((f) => {
+                  const Icon = icons[f];
+                  return (
+                    <button
+                      key={f}
+                      className={formats.includes(f) ? "selected" : ""}
+                      aria-pressed={formats.includes(f)}
+                      onClick={() =>
+                        setFormats((v) =>
+                          v.includes(f) ? v.filter((x) => x !== f) : [...v, f],
+                        )
+                      }
+                    >
+                      <Icon size={24} />
+                      {f}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="form-actions">
+                <button
+                  className="button primary full"
+                  disabled={!formats.length}
+                  onClick={() => setStep(2)}
+                >
+                  Esse é o meu ritmo
+                  <ArrowRight size={17} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="diagnostic-symbol">
+                <Sparkles size={42} />
+              </div>
+              <h2>
+                Todo começo é um
+                <br />
+                bom ponto de partida.
+              </h2>
+              <p>
+                Vamos fazer 5 questões, do básico ao mais desafiador, para
+                entender o que você já sabe.
+              </p>
+              <div className="diagnostic-details">
+                <span>
+                  <Check size={17} /> Sem nota mínima, sem pressão
+                </span>
+                <span>
+                  <Check size={17} /> Explicação para cada alternativa
+                </span>
+                <span>
+                  <Check size={17} /> Um plano a partir das suas respostas
+                </span>
+              </div>
+              <button className="button primary full" onClick={finish}>
+                Descobrir meu ponto de partida
+                <ChevronRight size={17} />
+              </button>
+              <button
+                className="text-button center"
+                onClick={() => {
+                  update((s) => ({
+                    ...s,
+                    profile: {
+                      ...s.profile,
+                      minutes,
+                      difficulties,
+                      formats,
+                      onboarded: true,
+                      diagnosticDone: false,
+                    },
+                    goals: goal ? [goal] : s.goals,
+                  }));
+                  onComplete();
+                }}
+              >
+                Quero explorar primeiro
+              </button>
+            </>
+          )}
+        </main>
+      </div>
+      <footer>Seu estudo. Seu ritmo. Seu futuro.</footer>
+    </div>
+  );
 }
